@@ -13,7 +13,6 @@ class VDL2MsgParser:
     parsedefs = [
         {
             # POSN38578W076083,JAY01,033904,195,HED01,034016,ESSSO,M11,321026,89677A
-            'label': 'H1',
             'pos_re': re.compile(r'^POS([NS]\d{5,6})([EW]\d{5,6}),'),
             'pos_format': 'dm'
         },
@@ -404,6 +403,6 @@ if __name__ == '__main__':
         sys.stdout.flush()
         logger.debug('%s', json.dumps(msg.jmsg))
         if msg.msg_text:
-            logger.info('flight: "%s" label: "%s", text: "%s"',
-                        msg.flight, msg.msg_label, msg.msg_text)
+            logger.info('reg: "%s", flight: "%s" label: "%s", text: "%s"',
+                        msg.reg, msg.flight, msg.msg_label, msg.msg_text)
         logger.info('%s\n', msg.toSBS())
