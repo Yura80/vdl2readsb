@@ -67,6 +67,13 @@ class VDL2MsgParser:
             'dst_re': re.compile(r'76401.*\n\d{2}.\d{2}[0-9A-Z]{4}([0-9A-Z]{4})')
         },
         {
+            # ...<HEADRTR><FROM>EHAM</FROM><TO>KATL</TO><FNBR>DAL73     </FNBR></HEADRTR>...
+            'label': 'H1',
+            'sublabel': 'CF',
+            'dep_re': re.compile(r'<FROM>([A-Z]{4})</FROM>.*<TO>[A-Z]{4}</TO>'),
+            'dst_re': re.compile(r'<FROM>[A-Z]{4}</FROM>.*<TO>([A-Z]{4})</TO>')
+        },
+        {
             # /AERODAT.22,C,1,1,IAD, 39.264, -77.547, 39.229, -77.542,11,309, 30, 15,499,15,31,244,223,4576,0.411,...,.../...8165
             'label': '32',
             'pos_re': re.compile(r'/.*\.\d+,.,.,.,[A-Z]{0,4}, (-?\d+\.\d{1,3}), (-?\d+\.\d{1,3}),'),
