@@ -293,6 +293,7 @@ class VDL2MsgParser:
                 "%H:%M:%S"), int(self.jmsg['vdl2']['t']['usec'])//1000)
 
             if 'acars' in avlc:
+
                 self.decodeACARS(avlc['acars'])
             if 'xid' in avlc:
                 self.decodeXID(avlc['xid'])
@@ -306,12 +307,12 @@ class VDL2MsgParser:
             return False
 
     def decodeACARS(self, acars):
-        self.reg = acars['reg'].lstrip('.')
-        self.flight = acars['flight']
+        self.reg = acars.get('reg', self.reg).lstrip('.')
+        self.flight = acars.get('flight', self.flight)
         if self.flight_as_callsign:
             self.callsign = self.flight
         self.type = 1
-        mtext = acars.get('msg_text', '')
+        mtext = acars.get('msg_text', acars.get('message', {}).get('text', ''))
         self.msg_text = mtext
         self.msg_label = acars.get('label', '')
 
@@ -327,6 +328,10 @@ class VDL2MsgParser:
                         self.lat = br.get('lat', '')
                         self.lon = br.get('lon', '')
                         self.type = 3
+        elif 'miam' in acars:
+            miam_acars = acars['miam'].get('single_transfer', {}).get('miam_core', {}).get('data', {}).get('acars', {})
+            if len(miam_acars) > 0:
+                self.decodeACARS(miam_acars)
         else:
             for pdef in self.parsedefs:
                 if pdef.get('label') == acars.get('label') or not pdef.get('label'):
