@@ -30,11 +30,14 @@ class outMsg:
             # 3N01 POSRPT 0073/18 EHAM/KATL .N503DN
             # /POS N39176W077051/ALT 380/MCH 853/FOB 0384
             # /TME 1609/WND 273 027/OAT -050/TAS 0496/ETA 1726
+            #
+            # 3701 INRANG 0404/20 MMMX/KJFK .XA-MAT
+            # 3A01 OPSCTL 3642/20 KBWI/KAUS .N5179A
             'label': '80',
             'pos_re': re.compile(r'/POS ([NS]\d{5,6})([EW]\d{5,6})/'),
             'pos_format': 'dm',
-            'dep_re': re.compile(r'POSRPT +\d+/\d+ ([0-9A-Z]{4})/[0-9A-Z]{4}'),
-            'dst_re': re.compile(r'POSRPT +\d+/\d+ [0-9A-Z]{4}/([0-9A-Z]{4})'),
+            'dep_re': re.compile(r'\d [A-Z]{6} +\d+/\d+ ([0-9A-Z]{4})/[0-9A-Z]{4} '),
+            'dst_re': re.compile(r'\d [A-Z]{6} +\d+/\d+ [0-9A-Z]{4}/([0-9A-Z]{4}) '),
             'eta_re': re.compile(r'/ETA (\d{4})')
         },
         {
