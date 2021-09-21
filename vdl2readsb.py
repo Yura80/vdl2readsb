@@ -158,6 +158,12 @@ class outMsg:
             'eta_re': re.compile(r'^/ET [^/]* / [A-Z]{4} [A-Z]{4} .*/EON (\d{4})')
         },
         {
+            # OS KBDL /ALT00000351
+            # OS KDCA /IR KDCA0311
+            'label': '5Z',
+            'dst_re': re.compile(r'^OS ([A-Z]{4}) /[A-Z]+'),
+        },
+        {
             # 202339 KATL KEWR7
             # any label
             'dep_re': re.compile(r'^\d{6} ([A-Z]{4}) [A-Z]{4}\d(?:$|\r|\n)'),
