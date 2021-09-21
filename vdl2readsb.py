@@ -74,6 +74,13 @@ class outMsg:
             'pos_div': 1
         },
         {
+            # 82,E,KCLT,KEWR,29,22R,170,09,,,0,0,0,0,0,0,,59165,C2ED
+            # /AERODAT.22,C,IAD,PVD,23,,6,6,0,150/09,,,45,0,44810,0,0,0,0,B355
+            'label': '33',
+            'dep_re': re.compile(r'^(?:/AERODAT.)?\d+,[A-Z],([A-Z]{3,4}),[A-Z]{3,4},'),
+            'dst_re': re.compile(r'^(?:/AERODAT.)?\d+,[A-Z],[A-Z]{3,4},([A-Z]{3,4}),')
+        },
+        {
             # /KAUS.TI2/040KAUSA4CFA
             'label': 'B9',
             'dst_re': re.compile(r'^/([0-9A-Z]{4})\.')
