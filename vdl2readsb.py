@@ -156,6 +156,18 @@ class outMsg:
             'dep_re': re.compile(r'^/\w{2} [^/]* / ([A-Z]{4}) [A-Z]{4} '),
             'dst_re': re.compile(r'^/\w{2} [^/]* / [A-Z]{4} ([A-Z]{4}) '),
             'eta_re': re.compile(r'^/ET [^/]* / [A-Z]{4} [A-Z]{4} .*/EON (\d{4})')
+        },
+        {
+            # 202339 KATL KEWR7
+            # any label
+            'dep_re': re.compile(r'^\d{6} ([A-Z]{4}) [A-Z]{4}\d(?:$|\r|\n)'),
+            'dst_re': re.compile(r'^\d{6} [A-Z]{4} ([A-Z]{4})\d(?:$|\r|\n)'),
+        },
+        {
+            # 200224  ATL  HPN0
+            # any label
+            'dep_re': re.compile(r'^\d{6}  ([A-Z]{3})  [A-Z]{3}\d(?:$|\r|\n)'),
+            'dst_re': re.compile(r'^\d{6}  [A-Z]{3}  ([A-Z]{3})\d(?:$|\r|\n)'),
         }
     ]
 
@@ -264,7 +276,7 @@ class outMsg:
                         self.type = 3
         else:
             for pdef in self.parsedefs:
-                if pdef.get('label') == acars.get('label'):
+                if pdef.get('label') == acars.get('label') or not pdef.get('label'):
                     if 'pos_re' in pdef:
                         match = re.search(pdef['pos_re'], mtext)
                         if match:
@@ -309,7 +321,8 @@ class outMsg:
         if not self.valid:
             return None
         return (
-            f'MSG,{self.type},1,{self.reg},{self.addr},1,{self.date},{self.time},{self.date},{self.time},'
+            f'MSG,{self.type},1,{self.reg},{self.addr},1,'
+            f'{self.date},{self.time},{self.date},{self.time},'
             f'{self.callsign},{self.alt},{self.speed},{self.track},'
             f'{self.lat},{self.lon},{self.vrate},{self.squawk},,,,{self.onground},'
             f'{self.dep_airport},{self.dst_airport},{self.eta}'
