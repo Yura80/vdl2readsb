@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-class outMsg:
+class VDL2MsgParser:
     parsedefs = [
         {
             # POSN38578W076083,JAY01,033904,195,HED01,034016,ESSSO,M11,321026,89677A
@@ -81,6 +81,11 @@ class outMsg:
             'dst_re': re.compile(r'^(?:/AERODAT.)?\d+,[A-Z],[A-Z]{3,4},([A-Z]{3,4}),')
         },
         {
+            'label': '35',
+            'dep_re': re.compile(r'^(?:/AERODAT.)?\d+,[A-Z],([A-Z]{3,4}),[A-Z]{3,4},'),
+            'dst_re': re.compile(r'^(?:/AERODAT.)?\d+,[A-Z],[A-Z]{3,4},([A-Z]{3,4}),')
+        },
+        {
             # /KAUS.TI2/040KAUSA4CFA
             'label': 'B9',
             'dst_re': re.compile(r'^/([0-9A-Z]{4})\.')
@@ -99,6 +104,7 @@ class outMsg:
         },
         {
             # A320,043656,1,2,TB000000/REP026,84,01,4/CC      ,SEP20,225312,KBWI,KDTW,8080/C0TWP020KS010400/C111,83000,4000,
+            # A350,000113,1,1,TB000000/REP035,01,02;H01,035,01,02,4000,00137,.D-AIXM,3,0,21,09,21,02,44,57,071/H02,KIAD EDDM,DLH415
             'label': 'H1',
             'dep_re': re.compile(r',TB000000/REP0..,[^,]*,[^,]*,[^,]*,[^,]*,\d{6},([A-Z]{4}),[A-Z]{4},'),
             'dst_re': re.compile(r',TB000000/REP0..,[^,]*,[^,]*,[^,]*,[^,]*,\d{6},[A-Z]{4},([A-Z]{4}),')
@@ -125,6 +131,12 @@ class outMsg:
             'dst_re': re.compile(r'^[0-9A-Z]+[A-Z]{3} ([A-Z]{3}) [NS]\d{5}[EW]\d{6}\d{4}')
         },
         {
+            # FPN/RI:DA:KCLT:AA:KJFK:CR:CLTJFK01(13L)..KALDA.J121.SIE:A:CAMRN4:F:CAMRN..DISCO..ASALT:AP:RNVZ 13L:F:HIRBOA8CD
+            'label': 'H1',
+            'dep_re': re.compile(r'FPN/RI:DA:([0-9A-Z]{4}):AA:[0-9A-Z]{4}:'),
+            'dst_re': re.compile(r'FPN/RI:DA:[0-9A-Z]{4}:AA:([0-9A-Z]{4}):')
+        },
+        {
             # EGLL,KIAH,201624, 39.74,- 76.38,40001,254,-119.5, 19300
             # MMMX,KJFK,201625, 37.94,- 75.58,39001,266,  47.2,  9300
             # position is not precise enough
@@ -132,6 +144,14 @@ class outMsg:
             'alt_re': re.compile(r'^[A-Z]{4},[A-Z]{4},\d{6},[ \-\.0-9]*,[ \-\.0-9]*,(\d{1,5})'),
             'dep_re': re.compile(r'^([A-Z]{4}),[A-Z]{4},'),
             'dst_re': re.compile(r'^[A-Z]{4},([A-Z]{4}),')
+        },
+        {
+            # /N38.268/W078.117/10/0.74/235/400/KHOU/1625/0073/00016/MOL  /PSK  /1405/YICUT/1357/
+            'label': '10',
+            'pos_re': re.compile(r'/([NS]\d{2,3}\.\d{1,3})/([EW]\d{2,3}\.\d{1,3})/\d+/[^/]+/\d+/\d+/[0-9A-Z]{4}/'),
+            'pos_format': 'dd',
+            'dst_re': re.compile(r'/[NS]\d{2,3}\.\d{1,3}/[EW]\d{2,3}\.\d{1,3}/\d+/[^/]+/\d+/\d+/([0-9A-Z]{4})/'),
+            'eta_re': re.compile(r'/[NS]\d{2,3}\.\d{1,3}/[EW]\d{2,3}\.\d{1,3}/\d+/[^/]+/\d+/\d+/[0-9A-Z]{4}/(\d{4})/')
         },
         {
             # MRB-13 ,N 39.643,W  77.299,33999,0486,1448,036\\TS132657,200921
@@ -143,17 +163,6 @@ class outMsg:
             'pos_format': 'dd',
             'pos_div': 1,
             'alt_re': re.compile(r'[NS] *\d+\.\d{1,3},[EW] *\d+\.\d{1,3}, *(\d{2,5})')
-        },
-        {
-            # 28,E,20SEP21,193330,N 38.577,W 76.827,33227, 10200,MMUN,KEWR,KEWR,22R/,29/,,,,,,,,0,0,0,0,0,0,0,,154.1,008.2,
-            # 28,E,20SEP21,175836,N 38.599,W 76.124,34684, 12400,KTPA,KLGA,KLGA,22/,/,,,,,,,,0,0,0,0,0,0,0,,121.8,010.5,
-            'label': '36',
-            'pos_re': re.compile(r',([NS] *\d+\.\d{1,3}),([EW] *\d+\.\d{1,3}), *\d{2,5},'),
-            'pos_format': 'dd',
-            'pos_div': 1,
-            'alt_re': re.compile(r',[NS] *\d+\.\d{1,3},[EW] *\d+\.\d{1,3}, *(\d{2,5}),'),
-            'dep_re': re.compile(r',[NS] *\d+\.\d{1,3},[EW] *\d+\.\d{1,3}, *\d{2,5}, *\d{2,5},([A-Z]{4}),[A-Z]{4},'),
-            'dst_re': re.compile(r',[NS] *\d+\.\d{1,3},[EW] *\d+\.\d{1,3}, *\d{2,5}, *\d{2,5},[A-Z]{4},([A-Z]{4}),')
         },
         {
             # POS02,N38228W077029,371,KVPC,KTEB,0920,2212,2257,008.1
@@ -197,10 +206,54 @@ class outMsg:
             # any label
             'dep_re': re.compile(r'^\d{6}  ([A-Z]{3})  [A-Z]{3}\d(?:$|\r|\n)'),
             'dst_re': re.compile(r'^\d{6}  [A-Z]{3}  ([A-Z]{3})\d(?:$|\r|\n)'),
+        },
+        {
+            # LDR01,189,C,SWA-2600-013,0,N 38.722,W 76.705,8358,  8.6,KMCO,KBWI,KBWI,15R/,/,/,0,0,,,,,,,0,0,0,00,,119.2,08.0,127.2,----.,,
+            # 28,E,21SEP21,161812,N 38.851,W 76.603,32422,  8680,KTPA,KEWR,KEWR,22L/,/,,,,,,,,0,0,0,0,0,0,0,,120.0,006.9,
+            # 212,F,20,20SEP21,180912,N 37.456,W 76.698,36060,  80,KABE,KMYR,KMYR,18/,36/,,,,,6,,6,,1,0,0,0,0,0,,,,,120.5,005.8
+            'pos_re': re.compile(r',([NS] *\d{1,3}\.\d{3}),([EW] *\d{1,3}\.\d{3}), *\d{1,5}. *[0-9\.]+,[A-Z]{4},[A-Z]{4},[A-Z]{4},'),
+            'pos_format': 'dd',
+            'pos_div': 1,
+            'alt_re': re.compile(r',[NS] *\d{1,3}\.\d{3},[EW] *\d{1,3}\.\d{3}, *(\d{1,5}). *[0-9\.]+,[A-Z]{4},[A-Z]{4},[A-Z]{4},'),
+            'dep_re': re.compile(r',[NS] *\d{1,3}\.\d{3},[EW] *\d{1,3}\.\d{3}, *\d{1,5}. *[0-9\.]+,([A-Z]{4}),[A-Z]{4},[A-Z]{4},'),
+            'dst_re': re.compile(r',[NS] *\d{1,3}\.\d{3},[EW] *\d{1,3}\.\d{3}, *\d{1,5}. *[0-9\.]+,[A-Z]{4},([A-Z]{4}),[A-Z]{4},')
         }
     ]
 
     re_parse_pos = re.compile(r'(-?)(0?\d{2})(\d{2})\.?(\d{1,2})')
+
+    def __init__(self, input, flight_as_callsign=True):
+        self.flight_as_callsign = flight_as_callsign
+        self.reset()
+        self.decode(input)
+
+    def reset(self):
+        self.jmsg = {}
+
+        self.valid = False
+        self.type = 8
+        self.addr = None
+        self.reg = ''
+        self.date = ''
+        self.time = ''
+
+        self.flight = ''
+        self.callsign = ''
+        self.alt = ''
+        self.speed = ''
+        self.track = ''
+        self.lat = ''
+        self.lon = ''
+        self.vrate = ''
+        self.squawk = ''
+        self.onground = 0
+
+        self.dep_airport = ''
+        self.dst_airport = ''
+        self.eta = ''
+
+        self.msg_text = ''
+        self.msg_label = ''
 
     def parsePos(self, spos, format='dd', div=1):
         result = ''
@@ -222,37 +275,6 @@ class outMsg:
         except Exception as e:
             logger.warning('Error parsing coordinates "%s": ', spos, e)
         return result
-
-    def __init__(self, input):
-        self.reset()
-        self.decode(input)
-
-    def reset(self):
-        self.jmsg = {}
-
-        self.valid = False
-        self.type = 8
-        self.addr = None
-        self.reg = ''
-        self.date = ''
-        self.time = ''
-
-        self.callsign = ''
-        self.alt = ''
-        self.speed = ''
-        self.track = ''
-        self.lat = ''
-        self.lon = ''
-        self.vrate = ''
-        self.squawk = ''
-        self.onground = 0
-
-        self.dep_airport = ''
-        self.dst_airport = ''
-        self.eta = ''
-
-        self.msg_text = ''
-        self.msg_label = ''
 
     def decode(self, input):
         try:
@@ -285,7 +307,9 @@ class outMsg:
 
     def decodeACARS(self, acars):
         self.reg = acars['reg'].lstrip('.')
-        self.callsign = acars['flight']
+        self.flight = acars['flight']
+        if self.flight_as_callsign:
+            self.callsign = self.flight
         self.type = 1
         mtext = acars.get('msg_text', '')
         self.msg_text = mtext
@@ -350,18 +374,18 @@ class outMsg:
         if not self.valid:
             return None
         return (
-            f'MSG,{self.type},1,{self.reg},{self.addr},1,'
+            f'MSG,{self.type},1,1,{self.addr},1,'
             f'{self.date},{self.time},{self.date},{self.time},'
             f'{self.callsign},{self.alt},{self.speed},{self.track},'
             f'{self.lat},{self.lon},{self.vrate},{self.squawk},,,,{self.onground},'
-            f'{self.dep_airport},{self.dst_airport},{self.eta}'
+            f'{self.reg},{self.flight},{self.dep_airport},{self.dst_airport},{self.eta}'
         )
 
 
 if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     for line in sys.stdin:
-        msg = outMsg(line)
+        msg = VDL2MsgParser(line)
         if not msg.valid:
             continue
         print(msg.toSBS())
@@ -369,5 +393,5 @@ if __name__ == '__main__':
         logger.debug('%s', json.dumps(msg.jmsg))
         if msg.msg_text:
             logger.info('flight: "%s" label: "%s", text: "%s"',
-                        msg.callsign, msg.msg_label, msg.msg_text)
+                        msg.flight, msg.msg_label, msg.msg_text)
         logger.info('%s\n', msg.toSBS())
