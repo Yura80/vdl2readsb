@@ -102,6 +102,12 @@ class outMsg:
             'dst_re': re.compile(r'^[^,]*,[^,]*,B7\d\d[^,]*,\d{6},[0-9A-Z\-]*,[A-Z]{4},([A-Z]{4}),\d{4},')
         },
         {
+            # A5E6210319PHL SDF N39547W0755831733M036202006G2880N39546W076015183
+            'label': 'H1',
+            'dep_re': re.compile(r'^[0-9A-Z]+([A-Z]{3}) [A-Z]{3} [NS]\d{5}[EW]\d{6}\d{4}'),
+            'dst_re': re.compile(r'^[0-9A-Z]+[A-Z]{3} ([A-Z]{3}) [NS]\d{5}[EW]\d{6}\d{4}')
+        },
+        {
             # EGLL,KIAH,201624, 39.74,- 76.38,40001,254,-119.5, 19300
             # MMMX,KJFK,201625, 37.94,- 75.58,39001,266,  47.2,  9300
             # position is not precise enough
