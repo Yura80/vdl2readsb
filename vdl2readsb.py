@@ -13,8 +13,10 @@ class VDL2MsgParser:
     parsedefs = [
         {
             # POSN38578W076083,JAY01,033904,195,HED01,034016,ESSSO,M11,321026,89677A
-            'pos_re': re.compile(r'^POS([NS]\d{5,6})([EW]\d{5,6}),'),
-            'pos_format': 'dm'
+            'pos_re': re.compile(r'^POS([NS]\d{5,6})([EW]\d{5,6}),[^,]*,\d{6},'),
+            'pos_format': 'dm',            
+            'alt_re': re.compile(r'^POS[NS]\d{5,6}[EW]\d{5,6},[^,]*,\d{6},(\d+),'),
+            'alt_mul': 100
         },
         {
             # POSN 380202W 754933,-------,0409,3358,,- 43,29132  70,FOB  221,ETA 0710,KPHL,TJSJ,
@@ -37,7 +39,9 @@ class VDL2MsgParser:
             'pos_format': 'dm',
             'dep_re': re.compile(r'\d [A-Z]{6} +\d+/\d+ ([0-9A-Z]{4})/[0-9A-Z]{4} '),
             'dst_re': re.compile(r'\d [A-Z]{6} +\d+/\d+ [0-9A-Z]{4}/([0-9A-Z]{4}) '),
-            'eta_re': re.compile(r'/ETA (\d{4})')
+            'eta_re': re.compile(r'/ETA (\d{4})'),
+            'alt_re': re.compile(r'/ALT +(\d{1,3})'),
+            'alt_mul': 100,
         },
         {
             # /FB 0087/AD KBOS/N3857.6,W07558.6,3P01 POSRPT  0892/20 KTPA/KBOS .N3062J
@@ -202,6 +206,13 @@ class VDL2MsgParser:
             'dst_re': re.compile(r'^OS ([A-Z]{4}) /[A-Z]+'),
         },
         {
+            # KADWKMVY154721SEP21
+            # KDCAKMIA1907OS KMIA /FUL0258
+            'label': 'QQ',
+            'dep_re': re.compile(r'^([A-Z]{4})[A-Z]{4}\d'),
+            'dst_re': re.compile(r'^[A-Z]{4}([A-Z]{4})\d'),
+        },
+        {
             # 202339 KATL KEWR7
             # any label
             'dep_re': re.compile(r'^\d{6} ([A-Z]{4}) [A-Z]{4}\d(?:$|\r|\n)'),
@@ -353,7 +364,7 @@ class VDL2MsgParser:
                     if 'alt_re' in pdef:
                         match = re.search(pdef['alt_re'], mtext)
                         if match:
-                            self.alt = int(match.group(1))
+                            self.alt = int(match.group(1)) * pdef.get('alt_mul', 1)
                     if 'dep_re' in pdef:
                         match = re.search(pdef['dep_re'], mtext)
                         if match:
