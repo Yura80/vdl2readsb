@@ -2,7 +2,9 @@
 # vdl2readsb
 
 Parses VDL2/ACARS message output of [dumpvdl2](https://github.com/szpajder/dumpvdl2) for useful information and output it in SBS-like format, compatible with wiedehopf's [readsb](https://github.com/wiedehopf/readsb).
+
 This is an experimental proof-of-concept. Please don't try to feed this data to any flight tracking websites!
+
 The script tries to extract the following data:
  - registration and flight number in IATA format
  - latitude, longitude and altitude
