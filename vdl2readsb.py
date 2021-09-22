@@ -3,6 +3,7 @@ import logging
 import json
 import re
 import sys
+import argparse
 from datetime import datetime
 
 logging.basicConfig(level=logging.DEBUG)
@@ -14,7 +15,7 @@ class VDL2MsgParser:
         {
             # POSN38578W076083,JAY01,033904,195,HED01,034016,ESSSO,M11,321026,89677A
             'pos_re': re.compile(r'^POS([NS]\d{5,6})([EW]\d{5,6}),[^,]*,\d{6},'),
-            'pos_format': 'dm',            
+            'pos_format': 'dm',
             'alt_re': re.compile(r'^POS[NS]\d{5,6}[EW]\d{5,6},[^,]*,\d{6},(\d+),'),
             'alt_mul': 100
         },
@@ -63,7 +64,7 @@ class VDL2MsgParser:
             # 02E18KBNAKLGA
             # N38803W07600416113052M037277024G000X2300309B,
             'label': 'H1',
-            'pos_re': re.compile(r'76401.*\n.*\n([NS]\d{5})([EW]\d{6})\d'),
+            'pos_re': re.compile(r'76401.*\n.*\n[\S\s]*([NS]\d{5})([EW]\d{6})\d'),
             'pos_format': 'dd',
             'pos_div': 1000,
             'dep_re': re.compile(r'76401.*\n\d{2}.\d{2}([0-9A-Z]{4})[0-9A-Z]{4}'),
@@ -75,6 +76,12 @@ class VDL2MsgParser:
             'sublabel': 'CF',
             'dep_re': re.compile(r'<FROM>([A-Z]{4})</FROM>.*<TO>[A-Z]{4}</TO>'),
             'dst_re': re.compile(r'<FROM>[A-Z]{4}</FROM>.*<TO>([A-Z]{4})</TO>')
+        },
+        {
+            # /EA2003/DSKDCA/SK21
+            'label': '30',
+            'dst_re': re.compile(r'/EA\d{4}/DS([A-Z]{4})'),
+            'eta_re': re.compile(r'/EA(\d{4})/DS[A-Z]{4}')
         },
         {
             # /AERODAT.22,C,1,1,IAD, 39.264, -77.547, 39.229, -77.542,11,309, 30, 15,499,15,31,244,223,4576,0.411,...,.../...8165
@@ -136,15 +143,26 @@ class VDL2MsgParser:
         },
         {
             # A5E6210319PHL SDF N39547W0755831733M036202006G2880N39546W076015183
+            # D3M321KSEAKBWIN39258W07723020491272P004188022G0009N39257W077193205
             'label': 'H1',
-            'dep_re': re.compile(r'^[0-9A-Z]+([A-Z]{3}) [A-Z]{3} [NS]\d{5}[EW]\d{6}\d{4}'),
-            'dst_re': re.compile(r'^[0-9A-Z]+[A-Z]{3} ([A-Z]{3}) [NS]\d{5}[EW]\d{6}\d{4}')
+            'dep_re': re.compile(r'^[0-9A-Z]+\d([A-Z]{3}[ A-Z])[A-Z]{3}[ A-Z][NS]\d{5}[EW]\d{6}\d{4}'),
+            'dst_re': re.compile(r'^[0-9A-Z]+\d[A-Z]{3}[ A-Z]([A-Z]{3}[ A-Z])[NS]\d{5}[EW]\d{6}\d{4}'),
+            # match only the last lat/lon pair
+            'pos_re': re.compile(r'^[0-9A-Z]+\d[A-Z]{3}[ A-Z][A-Z]{3}[ A-Z][NS]\d{5}[EW]\d{6}\d{4}[\s\S]*([NS]\d{5})([EW]\d{6})'),
+            'pos_format': 'dm'
         },
         {
             # FPN/RI:DA:KCLT:AA:KJFK:CR:CLTJFK01(13L)..KALDA.J121.SIE:A:CAMRN4:F:CAMRN..DISCO..ASALT:AP:RNVZ 13L:F:HIRBOA8CD
             'label': 'H1',
             'dep_re': re.compile(r'FPN/RI:DA:([0-9A-Z]{4}):AA:[0-9A-Z]{4}:'),
             'dst_re': re.compile(r'FPN/RI:DA:[0-9A-Z]{4}:AA:([0-9A-Z]{4}):')
+        },
+        {
+            # APM    1 G-ZBKK         BAW293  EGLLKIAD200921165939
+            # APM    2 SU-GES         MSR981  HECAKIAD210921003805
+            'label': 'H1',
+            'dep_re': re.compile(r'APM    \d [0-9A-Z\-]+ +[0-9A-Z\-]+ +([A-Z]{4})[A-Z]{4}\d{12}'),
+            'dst_re': re.compile(r'APM    \d [0-9A-Z\-]+ +[0-9A-Z\-]+ +[A-Z]{4}([A-Z]{4})\d{12}')
         },
         {
             # EGLL,KIAH,201624, 39.74,- 76.38,40001,254,-119.5, 19300
@@ -169,7 +187,7 @@ class VDL2MsgParser:
             # 134234,32304,1439,  68,N 39.523 W 76.324
             # N 38.887,W 77.064,927,5, 368
             'label': '16',
-            'pos_re': re.compile(r'([NS] *\d+\.\d{1,3}),([EW] *\d+\.\d{1,3})'),
+            'pos_re': re.compile(r'([NS] *\d+\.\d{1,3})[, ]([EW] *\d+\.\d{1,3})'),
             'pos_format': 'dd',
             'pos_div': 1,
             'alt_re': re.compile(r'[NS] *\d+\.\d{1,3},[EW] *\d+\.\d{1,3}, *(\d{2,5})')
@@ -239,8 +257,9 @@ class VDL2MsgParser:
 
     re_parse_pos = re.compile(r'(-?)(0?\d{2})(\d{2})\.?(\d{1,2})')
 
-    def __init__(self, input, flight_as_callsign=True):
+    def __init__(self, input, flight_as_callsign=True, parse_location='all'):
         self.flight_as_callsign = flight_as_callsign
+        self.parse_location = parse_location
         self.reset()
         self.decode(input)
 
@@ -248,6 +267,8 @@ class VDL2MsgParser:
         self.jmsg = {}
 
         self.valid = False
+        self.empty = True
+
         self.type = 8
         self.addr = None
         self.reg = ''
@@ -310,7 +331,6 @@ class VDL2MsgParser:
                 "%H:%M:%S"), int(self.jmsg['vdl2']['t']['usec'])//1000)
 
             if 'acars' in avlc:
-
                 self.decodeACARS(avlc['acars'])
             if 'xid' in avlc:
                 self.decodeXID(avlc['xid'])
@@ -332,6 +352,8 @@ class VDL2MsgParser:
         mtext = acars.get('msg_text', acars.get('message', {}).get('text', ''))
         self.msg_text = mtext
         self.msg_label = acars.get('label', '')
+        if self.msg_text:
+            self.empty = False
 
         if 'arinc622' in acars:
             # ADS-C
@@ -339,20 +361,21 @@ class VDL2MsgParser:
             if 'adsc' in arinc622:
                 adsc = arinc622['adsc']
                 for tag in adsc.get('tags', []):
-                    if 'basic_report' in tag:
+                    if 'basic_report' in tag and self.parse_location in ('all', 'adsc'):
                         br = tag['basic_report']
                         self.alt = br.get('alt', '')
                         self.lat = br.get('lat', '')
                         self.lon = br.get('lon', '')
                         self.type = 3
         elif 'miam' in acars:
-            miam_acars = acars['miam'].get('single_transfer', {}).get('miam_core', {}).get('data', {}).get('acars', {})
+            miam_acars = acars['miam'].get('single_transfer', {}).get(
+                'miam_core', {}).get('data', {}).get('acars', {})
             if len(miam_acars) > 0:
                 self.decodeACARS(miam_acars)
         else:
             for pdef in self.parsedefs:
                 if pdef.get('label') == acars.get('label') or not pdef.get('label'):
-                    if 'pos_re' in pdef:
+                    if 'pos_re' in pdef and self.parse_location == 'all':
                         match = re.search(pdef['pos_re'], mtext)
                         if match:
                             (slat, slon) = match.group(1, 2)
@@ -361,18 +384,19 @@ class VDL2MsgParser:
                             self.lon = self.parsePos(slon, pdef.get(
                                 'pos_format'), pdef.get('pos_div', 1))
                             self.type = 3
-                    if 'alt_re' in pdef:
+                    if 'alt_re' in pdef and self.parse_location == 'all':
                         match = re.search(pdef['alt_re'], mtext)
                         if match:
-                            self.alt = int(match.group(1)) * pdef.get('alt_mul', 1)
+                            self.alt = int(match.group(1)) * \
+                                pdef.get('alt_mul', 1)
                     if 'dep_re' in pdef:
                         match = re.search(pdef['dep_re'], mtext)
                         if match:
-                            self.dep_airport = match.group(1)
+                            self.dep_airport = match.group(1).strip()
                     if 'dst_re' in pdef:
                         match = re.search(pdef['dst_re'], mtext)
                         if match:
-                            self.dst_airport = match.group(1)
+                            self.dst_airport = match.group(1).strip()
                     if 'eta_re' in pdef:
                         match = re.search(pdef['eta_re'], mtext)
                         if match:
@@ -380,7 +404,7 @@ class VDL2MsgParser:
 
     def decodeXID(self, xid):
         for param in xid.get('vdl_params', []):
-            if param.get('name') == 'ac_location' and 'value' in param:
+            if param.get('name') == 'ac_location' and 'value' in param and self.parse_location == 'all':
                 pval = param['value']
                 self.alt = pval.get('alt', '')
                 if self.alt != '' and int(self.alt) > 60000:
@@ -389,8 +413,10 @@ class VDL2MsgParser:
                 # self.lat = round(pval.get('loc', {}).get('lat', ''), 5)
                 # self.lon = round(pval.get('loc', {}).get('lon', ''), 5)
                 self.type = 3
+                self.empty = False
             if param.get('name') == 'dst_airport' and 'value' in param:
                 self.dst_airport = param['value'].strip('.')
+                self.empty = False
 
     def toSBS(self):
         if not self.valid:
@@ -405,15 +431,25 @@ class VDL2MsgParser:
 
 
 if __name__ == '__main__':
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--no-empty', dest='no_empty', action='store_true',
+                           help='suppress empty messages')
+    argparser.add_argument('--no-callsign', dest='callsign', action='store_false',
+                           help='don''t output IATA flight number as callsign')
+    argparser.add_argument('--location', dest='location', required=False, default='all', type=str,
+                           choices=['all', 'adsc', 'none'],
+                           help='what kind of location data to parse')
+    args = argparser.parse_args()
+
     logger.setLevel(logging.DEBUG)
     for line in sys.stdin:
-        msg = VDL2MsgParser(line)
-        if not msg.valid:
+        msg = VDL2MsgParser(line, args.callsign, args.location)
+        if not msg.valid or (msg.empty and args.no_empty):
             continue
         print(msg.toSBS())
         sys.stdout.flush()
         logger.debug('%s', json.dumps(msg.jmsg))
         if msg.msg_text:
-            logger.info('reg: "%s", flight: "%s" label: "%s", text: "%s"',
+            logger.info('reg: "%s", flight: "%s", label: "%s", text: "%s"',
                         msg.reg, msg.flight, msg.msg_label, msg.msg_text)
         logger.info('%s\n', msg.toSBS())
