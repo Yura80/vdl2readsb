@@ -8,15 +8,13 @@ from datetime import datetime
 
 import vdl2parsedefs
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
 
 class VDL2MsgParser:
     parsedefs = vdl2parsedefs.parsedefs
     re_parse_pos = re.compile(r'(-?)(0?\d{2})(\d{2})\.?(\d{1,2})')
 
     def __init__(self, input, flight_as_callsign=True, parse_location='all'):
+        logger = logging.getLogger(__name__)
         self.flight_as_callsign = flight_as_callsign
         self.parse_location = parse_location
         self.reset()
@@ -198,9 +196,13 @@ if __name__ == '__main__':
     argparser.add_argument('--location', dest='location', required=False, default='all', type=str,
                            choices=['all', 'adsc', 'none'],
                            help='what kind of location data to parse')
+    argparser.add_argument('-d', '--debug', dest='debug', action='store_true',
+                           help='print messages and debug info to stderr')
     args = argparser.parse_args()
 
-    logger.setLevel(logging.DEBUG)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger(__name__)
     for line in sys.stdin:
         msg = VDL2MsgParser(line, args.callsign, args.location)
         if not msg.valid or (msg.empty and args.no_empty):
