@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import json
+import gzip
 import re
 import sys
 import argparse
@@ -13,10 +14,11 @@ class VDL2MsgParser:
     parsedefs = vdl2parsedefs.parsedefs
     re_parse_pos = re.compile(r'(-?)(0?\d{2})(\d{2})\.?(\d{1,2})')
 
-    def __init__(self, input, flight_as_callsign=True, parse_location='all'):
-        logger = logging.getLogger(__name__)
+    def __init__(self, input, flight_as_callsign=True, parse_location='all', db=None):
+        self.logger = logging.getLogger(__name__)
         self.flight_as_callsign = flight_as_callsign
         self.parse_location = parse_location
+        self.db = db
         self.reset()
         self.decode(input)
 
@@ -71,11 +73,14 @@ class VDL2MsgParser:
             logger.warning('Error parsing coordinates "%s": ', spos, e)
         return result
 
-    def decode(self, input):
+    def decode(self, input, type=None):
         try:
-            self.jmsg = json.loads(input)
+            self.jmsg = json.loads(input) if isinstance(input, str) else input
             if 'vdl2' not in self.jmsg:
-                return False
+                if 'fromHex' in self.jmsg:
+                    return self.decodeAirframesIo(self.jmsg)
+                else:
+                    return False
             avlc = self.jmsg['vdl2']['avlc']
             if avlc['src']['type'] != 'Aircraft':
                 return False
@@ -88,21 +93,21 @@ class VDL2MsgParser:
                 "%H:%M:%S"), int(self.jmsg['vdl2']['t']['usec'])//1000)
 
             if 'acars' in avlc:
-                self.decodeACARS(avlc['acars'])
+                self.decodeAcars(avlc['acars'])
             if 'xid' in avlc:
-                self.decodeXID(avlc['xid'])
+                self.decodeXid(avlc['xid'])
 
             self.valid = True
             return True
         except Exception as e:
-            logger.warning('Error decoding message: "%s"', input)
-            logger.warning('%s', e)
+            self.logger.warning('Error decoding message: "%s"', input)
+            self.logger.warning('%s', e)
             self.valid = False
             return False
 
-    def decodeACARS(self, acars):
-        self.reg = acars.get('reg', self.reg).lstrip('.')
-        self.flight = acars.get('flight', self.flight)
+    def decodeAcars(self, acars):
+        self.reg = (acars.get('reg') or self.reg).lstrip('.')
+        self.flight = acars.get('flight') or self.flight
         if self.flight_as_callsign:
             self.callsign = self.flight
         self.type = 1
@@ -128,38 +133,80 @@ class VDL2MsgParser:
             miam_acars = acars['miam'].get('single_transfer', {}).get(
                 'miam_core', {}).get('data', {}).get('acars', {})
             if len(miam_acars) > 0:
-                self.decodeACARS(miam_acars)
+                self.decodeAcars(miam_acars)
         else:
-            for pdef in self.parsedefs:
-                if pdef.get('label') == acars.get('label') or not pdef.get('label'):
-                    if 'pos_re' in pdef and self.parse_location == 'all':
-                        match = re.search(pdef['pos_re'], mtext)
-                        if match:
-                            (slat, slon) = match.group(1, 2)
-                            self.lat = self.parsePos(slat, pdef.get(
-                                'pos_format'), pdef.get('pos_div', 1))
-                            self.lon = self.parsePos(slon, pdef.get(
-                                'pos_format'), pdef.get('pos_div', 1))
-                            self.type = 3
-                    if 'alt_re' in pdef and self.parse_location == 'all':
-                        match = re.search(pdef['alt_re'], mtext)
-                        if match:
-                            self.alt = int(match.group(1)) * \
-                                pdef.get('alt_mul', 1)
-                    if 'dep_re' in pdef:
-                        match = re.search(pdef['dep_re'], mtext)
-                        if match:
-                            self.dep_airport = match.group(1).strip()
-                    if 'dst_re' in pdef:
-                        match = re.search(pdef['dst_re'], mtext)
-                        if match:
-                            self.dst_airport = match.group(1).strip()
-                    if 'eta_re' in pdef:
-                        match = re.search(pdef['eta_re'], mtext)
-                        if match:
-                            self.eta = match.group(1)
+            self.decodeAcarsMsg(mtext, acars.get('label'))
 
-    def decodeXID(self, xid):
+    def decodeAirframesIo(self, afmsg):
+        self.addr = afmsg.get('fromHex') or ''
+        self.reg = (afmsg.get('tail') or self.reg).lstrip('.')
+        if not self.addr:
+            if self.db and self.reg:
+                self.addr = db.reg2icao(self.reg)
+                self.logger.debug('reg2icao: %s -> %s', self.reg, self.addr)
+            if not self.addr:
+                self.valid = False
+                return False
+
+        mtime = datetime.strptime(afmsg['timestamp'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        self.date = mtime.strftime('%Y/%m/%d')
+        self.time = mtime.strftime("%H:%M:%S.%f")[:-3]
+
+        self.reg = (afmsg.get('reg') or self.reg).lstrip('.')
+        self.flight = afmsg.get('flightNumber') or self.flight
+        if self.flight_as_callsign:
+            self.callsign = self.flight
+        self.type = 1
+        self.msg_text = afmsg.get('text', '')
+        self.msg_label = afmsg.get('label', '')
+
+        self.lat = afmsg.get('latitude') or ''
+        self.lon = afmsg.get('longitude') or ''
+        self.alt = afmsg.get('altitude') or ''
+
+        if self.msg_text:
+            self.decodeAcarsMsg(self.msg_text, self.msg_label)
+
+        if self.lat or self.lon or self.alt:
+            if self.lat:
+                self.lat = round(self.lat, 5)
+            if self.lon:
+                self.lon = round(self.lon, 5)
+            self.empty = False
+
+        self.valid = True
+
+    def decodeAcarsMsg(self, mtext, label):
+        for pdef in self.parsedefs:
+            if pdef.get('label') == label or not pdef.get('label'):
+                if 'pos_re' in pdef and self.parse_location == 'all':
+                    match = re.search(pdef['pos_re'], mtext)
+                    if match:
+                        (slat, slon) = match.group(1, 2)
+                        self.lat = self.parsePos(slat, pdef.get(
+                            'pos_format'), pdef.get('pos_div', 1))
+                        self.lon = self.parsePos(slon, pdef.get(
+                            'pos_format'), pdef.get('pos_div', 1))
+                        self.type = 3
+                if 'alt_re' in pdef and self.parse_location == 'all':
+                    match = re.search(pdef['alt_re'], mtext)
+                    if match:
+                        self.alt = int(match.group(1)) * \
+                            pdef.get('alt_mul', 1)
+                if 'dep_re' in pdef:
+                    match = re.search(pdef['dep_re'], mtext)
+                    if match:
+                        self.dep_airport = match.group(1).strip()
+                if 'dst_re' in pdef:
+                    match = re.search(pdef['dst_re'], mtext)
+                    if match:
+                        self.dst_airport = match.group(1).strip()
+                if 'eta_re' in pdef:
+                    match = re.search(pdef['eta_re'], mtext)
+                    if match:
+                        self.eta = match.group(1)
+
+    def decodeXid(self, xid):
         for param in xid.get('vdl_params', []):
             if param.get('name') == 'ac_location' and 'value' in param and self.parse_location == 'all':
                 pval = param['value']
@@ -187,6 +234,27 @@ class VDL2MsgParser:
         )
 
 
+class aircraftDB:
+    def __init__(self, path):
+        with gzip.open(path) as f:
+            self.db = json.load(f)
+
+    def reg2icao(self, reg):
+        return self.db.get(reg)
+
+
+def printMsg(msg):
+    if not msg.valid or (msg.empty and args.no_empty):
+        return
+    print(msg.toSBS())
+    sys.stdout.flush()
+    logger.debug('%s', json.dumps(msg.jmsg))
+    if msg.msg_text:
+        logger.info('reg: "%s", flight: "%s", label: "%s", text: "%s"',
+                    msg.reg, msg.flight, msg.msg_label, msg.msg_text)
+    logger.info('%s\n', msg.toSBS())
+
+
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--no-empty', dest='no_empty', action='store_true',
@@ -198,19 +266,31 @@ if __name__ == '__main__':
                            help='what kind of location data to parse')
     argparser.add_argument('-d', '--debug', dest='debug', action='store_true',
                            help='print messages and debug info to stderr')
+    argparser.add_argument('--db', dest='db', required=False, type=str,
+                           default='/usr/local/share/tar1090/git-db/db/regIcao.js', help='path to aircraft db')
+    argparser.add_argument('--airframesio', dest='airframesio', action='store_true',
+                           help='get feed from airframes.io instead of stdin')
     args = argparser.parse_args()
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
-    for line in sys.stdin:
-        msg = VDL2MsgParser(line, args.callsign, args.location)
-        if not msg.valid or (msg.empty and args.no_empty):
-            continue
-        print(msg.toSBS())
-        sys.stdout.flush()
-        logger.debug('%s', json.dumps(msg.jmsg))
-        if msg.msg_text:
-            logger.info('reg: "%s", flight: "%s", label: "%s", text: "%s"',
-                        msg.reg, msg.flight, msg.msg_label, msg.msg_text)
-        logger.info('%s\n', msg.toSBS())
+
+    db = aircraftDB(args.db)
+
+    if args.airframesio:
+        import socketio
+        sio = socketio.Client()
+
+        @sio.on('newMessages')
+        def catch_all(event):
+            for m in event:
+                msg = VDL2MsgParser(m, args.callsign, args.location, db=db)
+                printMsg(msg)
+
+        sio.connect('https://api.airframes.io')
+        sio.wait()
+    else:
+        for line in sys.stdin:
+            msg = VDL2MsgParser(line, args.callsign, args.location, db=db)
+            printMsg(msg)

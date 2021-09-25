@@ -10,7 +10,6 @@ parsedefs = [
     },
     {
         # POSN 380202W 754933,-------,0409,3358,,- 43,29132  70,FOB  221,ETA 0710,KPHL,TJSJ,
-        'label': '12',
         'pos_re': re.compile(r'^POS([NS] ?\d{3,7})([EW] ?\d{3,7}),'),
         'pos_format': 'dms',
         'dep_re': re.compile(r'^POS.*,ETA ?\d{4,6},([0-9A-Z]{4}),[0-9A-Z]{4},'),
