@@ -1,8 +1,10 @@
 
 # vdl2readsb
 
-Parses VDL2/ACARS message output of [dumpvdl2](https://github.com/szpajder/dumpvdl2) for useful information and output it in SBS-like format, compatible with wiedehopf's [readsb](https://github.com/wiedehopf/readsb).
+Parses VDL2/ACARS message output of [dumpvdl2](https://github.com/szpajder/dumpvdl2) for useful information and converts it to SBS-like format, compatible with wiedehopf's [readsb](https://github.com/wiedehopf/readsb).
+
 This is an experimental proof-of-concept. Please don't try to feed this data to any flight tracking websites!
+
 The script tries to extract the following data:
  - registration and flight number in IATA format
  - latitude, longitude and altitude
@@ -22,6 +24,8 @@ SBS-like CSV format with extra fields at the end (registration, flight, departur
 - build and install dumpvdl2 with libacars, make sure it can receive any messages
 - install [readsb](https://github.com/wiedehopf/readsb), tar1090, graphs1090
 - disable rtlsdr and enable SBS input port in /etc/default/readsb:
-```NET_OPTIONS="--net --net-heartbeat 60 --net-ro-size 1250 --net-ro-interval 0.05 --net-ri-port 0 --net-ro-port 30002 --net-sbs-port 30003 --net-bi-port 30004,30104 --net-bo-port 30005 --net-sbs-in-port 33303"```
+
+    ```NET_OPTIONS="--net --net-heartbeat 60 --net-ro-size 1250 --net-ro-interval 0.05 --net-ri-port 0 --net-ro-port 30002 --net-sbs-port 30003 --net-bi-port 30004,30104 --net-bo-port 30005 --net-sbs-in-port 33303"```
 - run this command to send messages to readsb (with your receiver's actual PPM and frequencies for your region):
-    ```dumpvdl2 --output decoded:json:file:path=- --rtlsdr 0 --gain 40 --correction 44 136975000 136650000 136700000 136800000 | ~/devel/vdl2/vdl2readsb.py -d | nc localhost 33303```
+
+    ```dumpvdl2 --output decoded:json:file:path=- --rtlsdr 0 --gain 40 --correction 44 136975000 136650000 136700000 136800000 | ./vdl2readsb.py -d | nc localhost 33303```
