@@ -12,7 +12,7 @@ import vdl2parsedefs
 
 class VDL2MsgParser:
     parsedefs = vdl2parsedefs.parsedefs
-    re_parse_pos = re.compile(r'(-?)([01 ]?\d{2})(\d{2})\.?(\d{1,2})')
+    re_parse_pos = re.compile(r'(-?)([01]?\d{2})(\d{2})\.?(\d)$')
 
     def __init__(self, input, flight_as_callsign=True, parse_location='all', db=None):
         self.logger = logging.getLogger(__name__)
