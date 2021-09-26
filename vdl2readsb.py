@@ -12,7 +12,7 @@ import vdl2parsedefs
 
 class VDL2MsgParser:
     parsedefs = vdl2parsedefs.parsedefs
-    re_parse_pos = re.compile(r'(-?)(0?\d{2})(\d{2})\.?(\d{1,2})')
+    re_parse_pos = re.compile(r'(-?)([01 ]?\d{2})(\d{2})\.?(\d{1,2})')
 
     def __init__(self, input, flight_as_callsign=True, parse_location='all', db=None):
         self.logger = logging.getLogger(__name__)
@@ -159,6 +159,8 @@ class VDL2MsgParser:
         self.type = 1
         self.msg_text = afmsg.get('text', '')
         self.msg_label = afmsg.get('label', '')
+        if self.msg_text[0] == '#' and self.msg_text[3] == 'B':
+            self.msg_text = self.msg_text[4:]
 
         self.lat = afmsg.get('latitude') or ''
         self.lon = afmsg.get('longitude') or ''
