@@ -159,7 +159,7 @@ class VDL2MsgParser:
         self.type = 1
         self.msg_text = afmsg.get('text', '')
         self.msg_label = afmsg.get('label', '')
-        if self.msg_text[0] == '#' and self.msg_text[3] == 'B':
+        if self.msg_text and self.msg_text[0] == '#' and self.msg_text[3] == 'B':
             self.msg_text = self.msg_text[4:]
 
         self.lat = afmsg.get('latitude') or ''
