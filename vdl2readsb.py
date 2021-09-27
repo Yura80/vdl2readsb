@@ -138,7 +138,9 @@ class VDL2MsgParser:
             self.decodeAcarsMsg(mtext, acars.get('label'))
 
     def decodeAirframesIo(self, afmsg):
-        self.addr = afmsg.get('fromHex') or ''
+        self.addr = (afmsg.get('fromHex') or '').upper()
+        if self.addr == 'FFFFFFFF':
+            self.addr = ''
         self.reg = (afmsg.get('tail') or self.reg).lstrip('.')
         if not self.addr:
             if self.db and self.reg:
@@ -162,9 +164,10 @@ class VDL2MsgParser:
         if self.msg_text and self.msg_text[0] == '#' and self.msg_text[3] == 'B':
             self.msg_text = self.msg_text[4:]
 
-        self.lat = afmsg.get('latitude') or ''
-        self.lon = afmsg.get('longitude') or ''
-        self.alt = afmsg.get('altitude') or ''
+        if self.parse_location in ('all', 'adsc'):
+            self.lat = afmsg.get('latitude') or ''
+            self.lon = afmsg.get('longitude') or ''
+            self.alt = afmsg.get('altitude') or ''
 
         if self.msg_text:
             self.decodeAcarsMsg(self.msg_text, self.msg_label)
@@ -270,8 +273,11 @@ if __name__ == '__main__':
                            help='print messages and debug info to stderr')
     argparser.add_argument('--db', dest='db', required=False, type=str,
                            default='/usr/local/share/tar1090/git-db/db/regIcao.js', help='path to aircraft db')
-    argparser.add_argument('--airframesio', dest='airframesio', action='store_true',
-                           help='get feed from airframes.io instead of stdin')
+    argparser.add_argument('--input', dest='input', required=False, default='stdin', type=str,
+                           choices=['stdin', 'zmq', 'airframesio'],
+                           help='input data source')
+    argparser.add_argument('--zmq-port', dest='zmq_port', required=False, default=5556, type=int,
+                           help='ZMQ port number to listen to (if --input=zmq)')
     args = argparser.parse_args()
 
     if args.debug:
@@ -280,7 +286,7 @@ if __name__ == '__main__':
 
     db = aircraftDB(args.db)
 
-    if args.airframesio:
+    if args.input == 'airframesio':
         import socketio
         sio = socketio.Client()
 
@@ -292,6 +298,19 @@ if __name__ == '__main__':
 
         sio.connect('https://api.airframes.io')
         sio.wait()
+    elif args.input == 'zmq':
+        # stolen from https://github.com/varnav/zvdl2json/blob/main/zvdl2json.py
+        import zmq
+        context = zmq.Context()
+        s = context.socket(zmq.SUB)
+        binding = f'tcp://*:{args.zmq_port}'
+        s.bind(binding)
+        logger.info('ZMQ listening at:', binding)
+        s.setsockopt_string(zmq.SUBSCRIBE, '')
+        while True:
+            data = s.recv_json()
+            msg = VDL2MsgParser(data, args.callsign, args.location, db=db)
+            printMsg(msg)
     else:
         for line in sys.stdin:
             msg = VDL2MsgParser(line, args.callsign, args.location, db=db)
