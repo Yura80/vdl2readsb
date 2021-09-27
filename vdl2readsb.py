@@ -270,7 +270,7 @@ class VDL2MsgParser:
         )
 
 
-class aircraftDB:
+class AircraftDB:
     def __init__(self, path):
         with gzip.open(path) as f:
             self.db = json.load(f)
@@ -327,28 +327,30 @@ if __name__ == '__main__':
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING)
     logger = logging.getLogger(__name__)
 
-    db = aircraftDB(args.db)
+    db = AircraftDB(args.db)
 
     if args.input == 'airframesio':
         import socketio
-        sio = socketio.Client()
-
-        @sio.on('newMessages')
-        def catch_all(event):
-            for m in event:
-                msg = VDL2MsgParser(m, args.callsign, args.location, db=db)
-                printMsg(msg)
-
         while True:
             try:
+                sio = socketio.Client()
+
+                @sio.on('newMessages')
+                def catch_all(event):
+                    for m in event:
+                        msg = VDL2MsgParser(
+                            m, args.callsign, args.location, db=db)
+                        printMsg(msg)
                 if not sio.connected:
                     sio.connect('https://api.airframes.io')
                 sio.wait()
             except Exception as e:
                 logger.warning(e)
-                time.sleep(1)
+                time.sleep(3)
     elif args.input == 'zmq':
         # stolen from https://github.com/varnav/zvdl2json/blob/main/zvdl2json.py
         import zmq
