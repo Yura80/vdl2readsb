@@ -6,6 +6,7 @@ import re
 import sys
 import argparse
 import time
+import socket
 from datetime import datetime
 
 import vdl2parsedefs
@@ -293,16 +294,41 @@ class AircraftDB:
         return reg
 
 
-def printMsg(msg):
-    if not msg.valid or (msg.empty and args.no_empty):
-        return
-    print(msg.toSBS())
-    sys.stdout.flush()
-    logger.debug('%s', json.dumps(msg.jmsg))
-    if msg.msg_text:
-        logger.info('reg: "%s", flight: "%s", label: "%s", text: "%s"',
-                    msg.reg, msg.flight, msg.msg_label, msg.msg_text)
-    logger.info('%s\n', msg.toSBS())
+class MsgPrinter:
+    def __init__(self, args):
+        self.logger = logging.getLogger(__name__)
+        self.args = args
+        if args.out_tcp:
+            self.conn = False
+            self.host, self.port = args.out_tcp.split(':', 1)
+
+    def printMsg(self, msg):
+        if not msg.valid or (msg.empty and self.args.no_empty):
+            return
+
+        if self.args.out_file:
+            print(msg.toSBS(), file=self.args.out_file)
+            self.args.out_file.flush()
+
+        if self.args.out_tcp:
+            try:
+                if not self.conn:
+                    logger.debug('connecting to %s, port %s',
+                                 self.host, self.port)
+                    self.sock = socket.socket(
+                        socket.AF_INET, socket.SOCK_STREAM)
+                    self.sock.connect((self.host, int(self.port)))
+                    self.conn = True
+                self.sock.send((msg.toSBS() + '\n').encode())
+            except Exception as e:
+                logger.warning(e)
+                self.conn = False
+
+        self.logger.debug('%s', json.dumps(msg.jmsg))
+        if msg.msg_text:
+            self.logger.info('reg: "%s", flight: "%s", label: "%s", text: "%s"',
+                             msg.reg, msg.flight, msg.msg_label, msg.msg_text)
+        self.logger.info('%s\n', msg.toSBS())
 
 
 if __name__ == '__main__':
@@ -321,6 +347,10 @@ if __name__ == '__main__':
     argparser.add_argument('--input', dest='input', required=False, default='stdin', type=str,
                            choices=['stdin', 'zmq', 'airframesio'],
                            help='input data source')
+    argparser.add_argument('--out-file', dest='out_file', required=False, type=argparse.FileType('w', encoding='UTF-8'),
+                           help='where to send decoded data')
+    argparser.add_argument('--out-tcp', dest='out_tcp', required=False, type=str,
+                           help='TCP output connection address')
     argparser.add_argument('--zmq-port', dest='zmq_port', required=False, default=5556, type=int,
                            help='ZMQ port number to listen to (if --input=zmq)')
     args = argparser.parse_args()
@@ -330,6 +360,11 @@ if __name__ == '__main__':
     else:
         logging.basicConfig(level=logging.WARNING)
     logger = logging.getLogger(__name__)
+
+    if not args.out_file and not args.out_tcp:
+        args.out_file = sys.stdout
+
+    mprinter = MsgPrinter(args)
 
     db = AircraftDB(args.db)
 
@@ -344,7 +379,7 @@ if __name__ == '__main__':
                     for m in event:
                         msg = VDL2MsgParser(
                             m, args.callsign, args.location, db=db)
-                        printMsg(msg)
+                        mprinter.printMsg(msg)
                 if not sio.connected:
                     sio.connect('https://api.airframes.io')
                 sio.wait()
@@ -363,8 +398,8 @@ if __name__ == '__main__':
         while True:
             data = s.recv_json()
             msg = VDL2MsgParser(data, args.callsign, args.location, db=db)
-            printMsg(msg)
+            mprinter.printMsg(msg)
     else:
         for line in sys.stdin:
             msg = VDL2MsgParser(line, args.callsign, args.location, db=db)
-            printMsg(msg)
+            mprinter.printMsg(msg)
