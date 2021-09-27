@@ -5,6 +5,7 @@ import gzip
 import re
 import sys
 import argparse
+import time
 from datetime import datetime
 
 import vdl2parsedefs
@@ -73,6 +74,36 @@ class VDL2MsgParser:
             logger.warning('Error parsing coordinates "%s": ', spos, e)
         return result
 
+    def fixAddrReg(self):
+        if self.addr:
+            self.addr = self.addr.upper()
+        if self.addr == 'FFFFFF':
+            self.addr = ''
+        if len(self.addr) == 5:
+            self.addr = '0' + self.addr
+
+        dbaddr = None
+        if self.db and self.reg:
+            dbaddr = self.db.reg2icao(self.reg)
+            if not dbaddr:
+                self.logger.warning('reg2icao: not found "%s"', self.reg)
+            else:
+                self.logger.debug('reg2icao: %s -> %s', self.reg, self.addr)
+
+        if not self.addr:
+            if dbaddr:
+                self.addr = dbaddr
+
+        if self.db and self.addr:
+            dbreg = self.db.icao2reg(self.addr)
+            if not dbreg:
+                self.logger.warning(
+                    'unknown icao hex: "%s", reg: "%s"', self.addr, self.reg)
+            elif self.reg and self.reg != dbreg and self.reg.replace('-', '') != dbreg.replace('-', ''):
+                self.logger.warning(
+                    'reg mismatch: hex: "%s", db-reg: "%s", msg-reg: "%s"', self.addr, dbreg, self.reg)
+            self.reg = dbreg or self.reg
+
     def decode(self, input, type=None):
         try:
             self.jmsg = json.loads(input) if isinstance(input, str) else input
@@ -107,6 +138,7 @@ class VDL2MsgParser:
 
     def decodeAcars(self, acars):
         self.reg = (acars.get('reg') or self.reg).lstrip('.')
+        self.fixAddrReg()
         self.flight = acars.get('flight') or self.flight
         if self.flight_as_callsign:
             self.callsign = self.flight
@@ -134,21 +166,20 @@ class VDL2MsgParser:
                 'miam_core', {}).get('data', {}).get('acars', {})
             if len(miam_acars) > 0:
                 self.decodeAcars(miam_acars)
-        else:
+        elif mtext:
             self.decodeAcarsMsg(mtext, acars.get('label'))
 
     def decodeAirframesIo(self, afmsg):
         self.addr = (afmsg.get('fromHex') or '').upper()
-        if self.addr == 'FFFFFFFF':
-            self.addr = ''
         self.reg = (afmsg.get('tail') or self.reg).lstrip('.')
+        self.fixAddrReg()
         if not self.addr:
-            if self.db and self.reg:
-                self.addr = db.reg2icao(self.reg)
-                self.logger.debug('reg2icao: %s -> %s', self.reg, self.addr)
-            if not self.addr:
-                self.valid = False
-                return False
+            self.valid = False
+            return False
+
+        if 'linkDirection' in afmsg and afmsg['linkDirection'] == 'uplink':
+            self.valid = False
+            return False
 
         mtime = datetime.strptime(afmsg['timestamp'], '%Y-%m-%dT%H:%M:%S.%fZ')
         self.date = mtime.strftime('%Y/%m/%d')
@@ -161,8 +192,6 @@ class VDL2MsgParser:
         self.type = 1
         self.msg_text = afmsg.get('text', '')
         self.msg_label = afmsg.get('label', '')
-        if self.msg_text and self.msg_text[0] == '#' and self.msg_text[3] == 'B':
-            self.msg_text = self.msg_text[4:]
 
         if self.parse_location in ('all', 'adsc'):
             self.lat = afmsg.get('latitude') or ''
@@ -182,6 +211,8 @@ class VDL2MsgParser:
         self.valid = True
 
     def decodeAcarsMsg(self, mtext, label):
+        if mtext[0] == '#' and mtext[3] == 'B':
+            mtext = mtext[4:]
         for pdef in self.parsedefs:
             if pdef.get('label') == label or not pdef.get('label'):
                 if 'pos_re' in pdef and self.parse_location == 'all':
@@ -243,9 +274,23 @@ class aircraftDB:
     def __init__(self, path):
         with gzip.open(path) as f:
             self.db = json.load(f)
+            self.revdb = {}
+            tmpdb = {}
+            for reg, addr in self.db.items():
+                self.revdb[addr] = reg
+                if '-' in reg:
+                    ndreg = reg.replace('-', '')
+                    if ndreg not in self.db and ndreg not in tmpdb:
+                        tmpdb[ndreg] = addr
+            self.db.update(tmpdb)
 
     def reg2icao(self, reg):
-        return self.db.get(reg)
+        icao = self.db.get(reg)
+        return icao
+
+    def icao2reg(self, icao):
+        reg = self.revdb.get(icao)
+        return reg
 
 
 def printMsg(msg):
@@ -296,8 +341,14 @@ if __name__ == '__main__':
                 msg = VDL2MsgParser(m, args.callsign, args.location, db=db)
                 printMsg(msg)
 
-        sio.connect('https://api.airframes.io')
-        sio.wait()
+        while True:
+            try:
+                if not sio.connected:
+                    sio.connect('https://api.airframes.io')
+                sio.wait()
+            except Exception as e:
+                logger.warning(e)
+                time.sleep(1)
     elif args.input == 'zmq':
         # stolen from https://github.com/varnav/zvdl2json/blob/main/zvdl2json.py
         import zmq
