@@ -33,7 +33,7 @@ SBS-like CSV format with extra fields at the end (registration, flight, departur
     
 - disable rtlsdr and enable SBS JAERO input port in /etc/default/readsb:
 
-    ```NET_OPTIONS="--net --net-heartbeat 60 --net-ro-size 1250 --net-ro-interval 0.05 --net-ri-port 0 --net-ro-port 30002 --net-sbs-jaero-in-port 30003 --net-bi-port 30004,30104 --net-bo-port 30005 --net-sbs-in-port 33303"```
+    ```NET_OPTIONS="--net --net-heartbeat 60 --net-ro-size 1250 --net-ro-interval 0.05 --net-ri-port 0 --net-ro-port 30002 --net-sbs-port 30003 --net-bi-port 30004,30104 --net-bo-port 30005 --net-sbs-jaero-in-port 33303"```
     
 ### Usage
 - start dumpvdl2 (with your receiver's actual PPM correction value and frequencies for your region):
