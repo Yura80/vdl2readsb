@@ -1,4 +1,5 @@
 
+
 # vdl2readsb
 
 Parses VDL2/ACARS message output of [dumpvdl2](https://github.com/szpajder/dumpvdl2) for useful information and converts it to SBS-like format, compatible with wiedehopf's [readsb](https://github.com/wiedehopf/readsb).
@@ -20,12 +21,25 @@ SBS-like CSV format with extra fields at the end (registration, flight, departur
 
     MSG,3,1,1,A7DB08,1,2021/09/19,04:09:14.194,2021/09/19,04:09:14.194,NK0626,,,,38.03389,-75.82583,,,,,,0,N605NK,NK0626,KPHL,TJSJ,0710
 
-### Usage
-- build and install dumpvdl2 with libacars, make sure it can receive any messages
-- install [readsb](https://github.com/wiedehopf/readsb), tar1090, graphs1090
+### Installation
+- build and install [dumpvdl2](https://github.com/szpajder/dumpvdl2) with libacars and libzmq3-dev, make sure it can receive messages
+- install [readsb](https://github.com/wiedehopf/readsb) and [tar1090](https://github.com/wiedehopf/tar1090)
+- clone the repository and install python dependencies:
+    
+	    sudo apt install -y python3 python3-dev python3-pip
+	    git clone https://github.com/Yura80/vdl2readsb.git
+	    cd vdl2readsb
+	    sudo pip install -r requirements.txt
+    
 - disable rtlsdr and enable SBS JAERO input port in /etc/default/readsb:
 
     ```NET_OPTIONS="--net --net-heartbeat 60 --net-ro-size 1250 --net-ro-interval 0.05 --net-ri-port 0 --net-ro-port 30002 --net-sbs-jaero-in-port 30003 --net-bi-port 30004,30104 --net-bo-port 30005 --net-sbs-in-port 33303"```
-- run this command to send messages to readsb (with your receiver's actual PPM and frequencies for your region):
+    
+### Usage
+- start dumpvdl2 (with your receiver's actual PPM correction value and frequencies for your region):
+    
+    ```dumpvdl2 --output decoded:json:zmq:mode=client,endpoint=tcp://127.0.0.1:5556 --rtlsdr 0 --gain 40 --correction 44 136975000 136650000 136700000 136800000 &```
+    
+- run this command to send messages to readsb and save to a local file:
 
-    ```dumpvdl2 --output decoded:json:file:path=- --rtlsdr 0 --gain 40 --correction 44 136975000 136650000 136700000 136800000 | ./vdl2readsb.py -d | nc localhost 33303```
+    ```./vdl2readsb.py --input=zmq --out-tcp=localhost:33303 --out-file=./sbslog.txt &```
